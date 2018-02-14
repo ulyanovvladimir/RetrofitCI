@@ -1,73 +1,84 @@
-# Retrofit movies 
+# Continuous Integration - пример конфигурации
 
 ## Обзор
-
-В данном задании необходимо использовать библиотеку Retrofit для обмена данных с веб-сервисом для создания приложения, выводящего информацию о фильмах-новинках, ожидаемых в прокате.
-
-В данном задании вы поработаете со следующими технологиями:
-- Retrofit
-- Material design
-- SwipeRereshLayout
-- themoviedb.org API
-- Фоновая загрузка изображений с помощью AsyncTask
-
-Данный скелет приложения собирается и запускается. Он отображает список фильмов с максимальный рейтингом.
-
-## Задачи 
-
-1. Переделать на список фильмов-новинок, ожидаемых в прокате. 
-2. Фильмы должны возвращаться в случайном порядке.
-3. Добавить корректную обработку жеста обновления
-4. Добавить загрузку изображений-постеров для фильма.
-5. При нажатии на элемент списка фильмов переходить на экран с его полной информацией.
+Будем использовать связку GitHub + CircleCI для организации Continuous Integration
 
 ## Инструкции
-Подробные инструкции находятся в исходных текстах с пометкой //TODO
 
-### TMDBInterface
-Данный интерфейс предназначен для взаимодействия с API сервера http://themoviedb.org
+### Создадим репозиторий с коммитом на GitHub
+Проект должен собираться через Gradle
 
-См. примеры запросов на https://www.themoviedb.org/documentation/api/discover
 
-Данный интерфейс используется библиотекой Retrofit для автоматической генерации клиента взаимодействия с сервером. Для этого используются простой класс APIClient. Кроме того вы можете использовать продвинутый класс ServiceGenerator, который поддерживает сохранение cookie и журнализацию.
+### Зарегистрируемся на CircleCI
+http://circleci.com
 
-Необходимо добавить свой метод получения фильмов-новинок по аналогии с методом получения ТОП-а фильмов.
+Используем вход через GitHub.
 
-http://api.themoviedb.org/3/movie/upcoming?api_key=###
+### Добавление проекта
+В навигационной панели слева выбираем Projects
 
-JSON формат ответа совпадает с выдачей топа фильмов, поэтому модель менять или дополнять не потребуется.
+Вверху справа нажимаем кнопку Add Project
 
-### MoviesAdapter
-Данный класс нужен для работы RecyclerView компоненты списка. Для этого он реализует интерфейс RecyclerView.Adapter
+Выбираем проект из списка проектов GitHub.
 
-Данный адаптер использует паттерн ViewHolder для управления компонентами UI отдельного элемента списка. Поэтому внутри определен класс MovieViewHolder. Подробную информацию о RecyclerView, SwipeRefreshLayout, ViewHolder смотрите в лекциях, документации и других источниках.
+В настройках проекта в CircleCI выбираем
 
-#### конструктор MovieViewHolder
+Build forked pull requests - ON
 
-Для начала необходимо присвоить переменной poster соответствующий ImageView с помощью метода findViewById.
+### Конфигурация CircleCI
+Для того, чтобы приложение автоматически собиралось, необходимо добавить папку
 
-#### onBindViewHolder
+.circleci
 
-вызывается моделью для отрисовки i-го элемента списка, в качестве параметра передает индекс элемента и ViewHolder. Реализуем загрузку изображений.
+и в нее добавить файл config.yml следующего содержания:
 
-1. Используйте метод getPosterPath() для получения относительного пути до изображения постера конкретного фильма
-2. Запустите DownloadImageTask для фоновой загрузки изображения.
+```yml
+# Java Gradle CircleCI 2.0 configuration file
+#
+# Check https://circleci.com/docs/2.0/language-java/ for more details
+#
+version: 2
+jobs:
+  build:
+    working_directory: ~/code
+    docker:
+      - image: circleci/android:api-26-alpha
+    environment:
+      JVM_OPTS: -Xmx3200m
+    steps:
+      - checkout
+      - restore_cache:
+          key: jars-{{ checksum "build.gradle" }}-{{ checksum  "app/build.gradle" }}
+#      - run:
+#         name: Chmod permissions #if permission for Gradlew Dependencies fail, use this.
+#         command: sudo chmod +x ./gradlew
+      - run:
+          name: chmod permissions
+          command: chmod +x ./gradlew
+      - run:
+          name: Download Dependencies
+          command: ./gradlew androidDependencies
+      - save_cache:
+          paths:
+            - ~/.gradle
+          key: jars-{{ checksum "build.gradle" }}-{{ checksum  "app/build.gradle" }}
+      - run:
+          name: Run Tests
+          command: ./gradlew lint test
+      - store_artifacts:
+          path: app/build/reports
+          destination: reports
+      - store_test_results:
+          path: app/build/test-results
+```
 
-### MainActivity
+Сделайте commit и push в репозиторий.
 
-#### onCreate
-Заменить заголовок приложения на UPCOMING, используя соответствующую константу из ресурсов
- 
-#### refresh
+Теперь автоматически будет производиться сборка проекта в CircleCI при каждом коммите. 
+Если включена настройка сборки при pull-request, то будут собираться и прогоняться тесты и для 
+них тоже. Это позволит принять решение о мердже.
 
-1. включить анимацию обновления для SwipeRefreshLayout с помощью метода setRefreshing
-2. заменить запрос получения топа фильмов на получение списка новинок, ожидаемых в прокате, используя созданный новый метод интерфейса TMDBInterface
-3. для наглядности работы механизма обновления списка перемешать полученный от сервера список фильмов с помощью Collections.shuffle(java.util.List) 
-4. убрать анимацию обновления для SwipeRefreshLayout с помощью метода setRefreshing как для успешной попытки выполнения запроса, так и для провала.
-
-### DetailsActivity
-И, наконец, надо написать собственный класс DetailsActivity для вывода полной информации о фильме.
-
-В целях эффективности и минимизации запросов к серверу было бы правильнее передать полученный объект модели Movie в  активити через интент или даже организовать какое-нибудь кэширование, но для тренировки клиент-серверного взаимодействия DetailsActivity должен получать в интенте только ID фильма. По его ID с помощью API можно получить полную информацию о фильме и вывести на экран.
-
-Не забудьте в классе MoviesAdapter.MovieViewHolder исправить заглушку в методе onBindViewHolder для перехода на DetailsActivity с указанным фильмом.
+## Continuous Delivery
+### Создание ключа
+### Безопасное хранение ключа в шифрованном бакете
+### Доставка релизов через Fabric 
